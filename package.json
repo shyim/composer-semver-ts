@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "description": "Composer-style semantic version parsing and constraint matching for JavaScript",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shyim/composer-semver-ts"
+  },
+  "homepage": "https://github.com/shyim/composer-semver-ts",
+  "bugs": {
+    "url": "https://github.com/shyim/composer-semver-ts/issues"
+  },
   "files": [
     "dist"
   ],
@@ -15,6 +23,9 @@
       "import": "./dist/index.mjs",
       "default": "./dist/index.mjs"
     }
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsdown",
