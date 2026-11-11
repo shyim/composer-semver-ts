@@ -23,12 +23,11 @@ const operatorHandlers = new Map<string, ConstraintFn>([
   ["~>", constraintPessimistic],
   ["^", constraintCaret],
   ["~", constraintTilde],
-  ["*", constraintWildcard],
 ]);
 
-const simpleOperators = [">", "<", ">=", "<=", "!=", "==", "~>", "~"];
 const constraintRegexp = new RegExp(
-  String.raw`^\s*(=|==|!=|<>|>|<|>=|<=|~>|\^|~|)\s*v?([0-9*]+(?:\.[0-9*]+)*(?:-[0-9A-Za-z-.]+)?(?:\+[0-9A-Za-z-.]+)?)(?:@([A-Za-z]+))?\s*$`,
+  String.raw`^\s*(==|!=|<>|>=|<=|~>|=|>|<|\^|~|)\s*(v?[0-9xX*]+(?:\.[0-9xX*]+)*(?:-?[A-Za-z][0-9A-Za-z.-]*)?(?:\+[^\s,@]+)?)(?:@([A-Za-z]+))?\s*$`,
+  "i",
 );
 
 export class Constraint {
@@ -101,23 +100,13 @@ export class Constraints {
 }
 
 export function parseConstraint(input: string): Constraints {
-  const groups = input.replaceAll("||", "|").split("|").map(parseConstraintGroup);
+  const groups = input.trim().split(/\s*\|\|?\s*/).map(parseConstraintGroup);
   return new Constraints(groups);
 }
 
 export function parseSingle(input: string): Constraint {
-  if (input.trim() === "*") {
-    return new Constraint({
-      fn: constraintWildcard,
-      operator: "*",
-      originalSegments: 1,
-      originalValue: input,
-      stability: "",
-      version: null,
-    });
-  }
-
-  const match = input.match(constraintRegexp);
+  const value = input.trim().replace(/^([^,\s]+) +as +([^,\s]+)$/, "$1");
+  const match = value.match(constraintRegexp);
   if (!match) {
     throw new Error(`malformed constraint: ${input}`);
   }
@@ -129,7 +118,7 @@ export function parseSingle(input: string): Constraint {
     throw new Error(`unknown stability: ${stability}`);
   }
 
-  if (versionText.includes("*")) {
+  if (/^[v\d.xX*]+$/i.test(versionText) && /[xX*]/.test(versionText)) {
     return parseWildcardConstraint({ operator, originalValue: input, stability, versionText });
   }
 
@@ -141,7 +130,7 @@ export function parseSingle(input: string): Constraint {
   return new Constraint({
     fn,
     operator,
-    originalSegments: versionText.split(".").length,
+    originalSegments: versionText.replace(/^v/i, "").split(/[^\d.]/, 1)[0].split(".").length,
     originalValue: input,
     stability,
     version: parseVersion(versionText),
@@ -149,40 +138,30 @@ export function parseSingle(input: string): Constraint {
 }
 
 function parseConstraintGroup(input: string): Constraint[] {
-  if (input.includes(" - ")) {
-    const parts = input.split(" - ");
-    if (parts.length !== 2) {
-      throw new Error(`malformed constraint: ${input}`);
+  // Keep operator spaces, aliases and hyphen ranges together, as Composer does.
+  // Empty clauses and repeated separators must reach parseSingle and fail.
+  // Separator grammar: composer/semver's VersionParser::parseConstraints (MIT).
+  const tokens = input.split(/(?<!^|as|[=>< ,]) *(?<!-)[, ](?!-) *(?!,|as|$)/);
+  return tokens.flatMap((token) => {
+    const hyphen = token.match(/^(\S+) +- +(\S+)$/);
+    if (!hyphen) {
+      return [parseSingle(token)];
     }
 
-    return [parseSingle(`>=${parts[0].trim()}`), parseSingle(`<=${parts[1].trim()}`)];
-  }
-
-  return normalizeConstraintTokens(input).split(",").filter(Boolean).map(parseSingle);
-}
-
-function normalizeConstraintTokens(input: string): string {
-  const tokens = input.trim().split(/\s+/).filter(Boolean);
-  const normalized: string[] = [];
-
-  for (let index = 0; index < tokens.length; index += 1) {
-    const token = tokens[index];
-    const next = tokens[index + 1];
-
-    if (isOperator(token) && next) {
-      normalized.push(`${token}${next}`);
-      index += 1;
-      continue;
+    const [, from, to] = hyphen;
+    // Explicit patches/suffixes are inclusive; partial numeric upper bounds
+    // include every version in the named major or minor.
+    const partial = to.match(/^v?(\d+)(?:\.(\d+))?(?:\+[^\s]+)?$/i);
+    if (!partial) {
+      return [parseSingle(`>=${from}`), parseSingle(`<=${to}`)];
     }
-
-    normalized.push(token);
-  }
-
-  return normalized.join(",");
-}
-
-function isOperator(value: string): boolean {
-  return operatorHandlers.has(value) || simpleOperators.includes(value);
+    parseVersion(to);
+    const upper =
+      partial[2] === undefined
+        ? `${Number(partial[1]) + 1}.0.0`
+        : `${partial[1]}.${Number(partial[2]) + 1}.0`;
+    return [parseSingle(`>=${from}`), parseSingle(`<${upper}-dev`)];
+  });
 }
 
 function parseWildcardConstraint({
@@ -196,97 +175,19 @@ function parseWildcardConstraint({
   stability: string;
   versionText: string;
 }): Constraint {
-  const parts = versionText.split(".");
-  const starIndex = parts.indexOf("*");
-
-  if (starIndex === -1 || starIndex !== parts.length - 1 || parts.lastIndexOf("*") !== starIndex) {
+  const match = versionText.match(/^v?(?:(\d+(?:\.\d+){0,2})\.)?[xX*](?:\.[xX*])*$/i);
+  if (operator !== "" || !match) {
     throw new Error(`malformed constraint: ${originalValue}`);
   }
-
-  if (starIndex === 1) {
-    const version = parseVersion(`${parts[0]}.0.0`);
-    return wildcardConstraint({
-      originalSegments: 2,
-      originalValue,
-      operator,
-      stability,
-      version,
-      test: (candidate, check) =>
-        compareWildcardSegment(operator, candidate.major(), check.major()),
-    });
-  }
-
-  if (starIndex === 2) {
-    const version = parseVersion(`${parts[0]}.${parts[1]}.0`);
-    return wildcardConstraint({
-      originalSegments: 3,
-      originalValue,
-      operator,
-      stability,
-      version,
-      test: (candidate, check) => {
-        if (candidate.major() !== check.major()) {
-          return compareWildcardSegment(operator, candidate.major(), check.major(), true);
-        }
-
-        return compareWildcardSegment(operator, candidate.minor(), check.minor());
-      },
-    });
-  }
-
-  throw new Error(`malformed constraint: ${originalValue}`);
-}
-
-function wildcardConstraint({
-  originalSegments,
-  originalValue,
-  operator,
-  stability,
-  test,
-  version,
-}: {
-  originalSegments: number;
-  originalValue: string;
-  operator: string;
-  stability: string;
-  test: (candidate: Version, check: Version) => boolean;
-  version: Version;
-}): Constraint {
+  const prefix = match[1]?.split(".").map(Number) ?? [];
   return new Constraint({
-    fn: (candidate, check) => Boolean(check && test(candidate, check)),
-    operator,
-    originalSegments,
+    fn: (candidate) => prefix.every((segment, index) => candidate.segmentAt(index) === segment),
+    operator: prefix.length === 0 ? "*" : operator,
+    originalSegments: versionText.split(".").length,
     originalValue,
     stability,
-    version,
+    version: prefix.length === 0 ? null : parseVersion(prefix.join(".")),
   });
-}
-
-function compareWildcardSegment(
-  operator: string,
-  candidate: number,
-  check: number,
-  majorMismatch = false,
-): boolean {
-  switch (operator) {
-    case ">=":
-      return candidate >= check;
-    case ">":
-      return candidate > check;
-    case "<=":
-      return candidate <= check;
-    case "<":
-      return candidate < check;
-    case "!=":
-    case "<>":
-      return majorMismatch ? true : candidate !== check;
-    case "":
-    case "=":
-    case "==":
-      return majorMismatch ? false : candidate === check;
-    default:
-      return majorMismatch ? false : candidate === check;
-  }
 }
 
 function prereleaseCheck(version: Version, check: Version): boolean {
@@ -406,10 +307,6 @@ function constraintTilde(
     return prereleaseCheck(version, check);
   }
 
-  return true;
-}
-
-function constraintWildcard(): boolean {
   return true;
 }
 

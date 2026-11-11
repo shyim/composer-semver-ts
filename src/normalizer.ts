@@ -31,6 +31,11 @@ export function normalizeVersion(version: string): string {
     normalizedVersion = buildMatch[1];
   }
 
+  const numericDev = normalizedVersion.match(/^(v?\d+(?:\.\d+){0,3})[.-]?dev$/i);
+  if (numericDev) {
+    return `${normalizeVersion(numericDev[1])}-dev`;
+  }
+
   let matches: RegExpMatchArray | null = null;
   let modifierIndex = 0;
 

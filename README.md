@@ -121,6 +121,26 @@ console.log(parseConstraint("2.0.*").check(parseVersion("2.1.0")));
 // false
 ```
 
+Wildcards may use `*`, `x`, or `X`, including repeated trailing segments such as
+`2.x.x`. Composer does not allow a comparison operator with a wildcard: use
+`>=2.0` instead of `>=2.*`.
+
+### Hyphen Ranges
+
+A partial upper bound includes the whole major or minor. A complete upper bound
+is inclusive:
+
+```ts
+console.log(parseConstraint("8.2 - 8.4").check(parseVersion("8.4.12")));
+// true
+
+console.log(parseConstraint("8.2 - 8.4.0").check(parseVersion("8.4.12")));
+// false
+```
+
+Ranges can be combined with comma/space-separated constraints and OR clauses.
+Empty clauses, repeated commas, and leading or trailing separators throw an error.
+
 ### OR Constraints
 
 ```ts
