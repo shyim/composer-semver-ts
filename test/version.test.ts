@@ -166,6 +166,10 @@ describe("version comparisons", () => {
     ["1.2.3-rc2", "1.2.3-rc1", 1],
     ["1.2.3-rc1", "1.2.3-rc10", -1],
     ["1.2.3-rc10", "1.2.3-rc1", 1],
+    ["1.2.3-dev", "1.2.3-alpha1", -1],
+    ["1.2.3-alpha1", "1.2.3-dev", 1],
+    ["1.2.3-dev", "1.2.3-beta1", -1],
+    ["1.2.3-dev", "1.2.3-rc1", -1],
   ])("compares prerelease %s to %s", (left, right, expected) => {
     expect(mustVersion(left).compare(mustVersion(right))).toBe(expected);
   });

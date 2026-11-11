@@ -51,7 +51,18 @@ describe("normalizeVersion", () => {
     ["1.0.0RC1", "1.0.0.0-rc1"],
     ["1.0.0-RC2", "1.0.0.0-rc2"],
     ["1.0.0RC2", "1.0.0.0-rc2"],
+    ["8-dev", "8.0.0.0-dev"],
+    ["8.5-dev", "8.5.0.0-dev"],
+    ["8.5.0-dev", "8.5.0.0-dev"],
+    ["8.5.0dev", "8.5.0.0-dev"],
+    ["8.5.0.dev", "8.5.0.0-dev"],
+    ["8.5.0.1-dev", "8.5.0.1-dev"],
+    ["8.5.x-dev", "8.5.9999999.9999999-dev"],
   ])("normalizes %s", (input, expected) => {
     expect(normalizeVersion(input)).toBe(expected);
+  });
+
+  test.each(["8.5.0-dev1", "8.5.0-dev-dev"])("rejects invalid dev suffix %s", (input) => {
+    expect(() => normalizeVersion(input)).toThrow();
   });
 });

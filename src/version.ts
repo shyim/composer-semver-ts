@@ -211,6 +211,11 @@ function compareReleasePart(left: string, right: string): number {
     return 0;
   }
 
+  // PHP orders development versions before alpha, beta and release candidates.
+  if (left === "dev" || right === "dev") {
+    return left === "dev" ? -1 : 1;
+  }
+
   const leftIsNumber = /^\d+$/.test(left);
   const rightIsNumber = /^\d+$/.test(right);
 

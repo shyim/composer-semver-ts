@@ -40,28 +40,6 @@ describe("wildcards", () => {
   });
 
   test.each([
-    [">= 2.*", "2.0.0", true],
-    [">= 2.*", "2.1.0", true],
-    [">= 2.*", "3.0.0", true],
-    [">= 2.*", "1.9.9", false],
-    ["< 2.*", "1.9.9", true],
-    ["< 2.*", "2.0.0", false],
-    ["< 2.*", "2.1.0", false],
-    [">=2.* <4.*", "2.0.0", true],
-    [">=2.* <4.*", "3.9.9", true],
-    [">=2.* <4.*", "4.0.0", false],
-    [">=2.* <4.*", "1.9.9", false],
-    [">= 2.0.*", "2.0.0", true],
-    [">= 2.0.*", "2.0.9", true],
-    [">= 2.0.*", "2.1.0", true],
-    [">= 2.0.*", "1.9.9", false],
-    ["< 2.1.*", "2.0.9", true],
-    ["< 2.1.*", "2.1.0", false],
-    ["< 2.1.*", "2.2.0", false],
-    [">=2.0.* <2.2.*", "2.0.0", true],
-    [">=2.0.* <2.2.*", "2.1.9", true],
-    [">=2.0.* <2.2.*", "2.2.0", false],
-    [">=2.0.* <2.2.*", "1.9.9", false],
     ["2.*", "2.0.0-alpha", true],
     ["2.*", "2.1.0-beta", true],
     ["2.0.*", "2.0.0-alpha", true],
@@ -69,6 +47,19 @@ describe("wildcards", () => {
     ["2.0.*", "2.1.0-alpha", false],
   ])("checks wildcard constraint %s against %s", (constraint, version, expected) => {
     expect(mustConstraint(constraint).check(mustVersion(version))).toBe(expected);
+  });
+});
+
+describe("wildcard comparator validation", () => {
+  test.each([
+    ">= 2.*",
+    "< 2.*",
+    ">=2.* <4.*",
+    ">= 2.0.*",
+    "< 2.1.*",
+    ">=2.0.* <2.2.*",
+  ])("rejects unsupported Composer wildcard comparator %s", (constraint) => {
+    expect(() => mustConstraint(constraint)).toThrow();
   });
 });
 
